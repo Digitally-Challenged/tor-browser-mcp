@@ -14,7 +14,10 @@ import argparse
 import asyncio
 import logging
 import os
+import signal
+import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from torbrowser_driver import (
     DEFAULT_CAPABILITIES,
@@ -22,9 +25,19 @@ from torbrowser_driver import (
     OPTIONAL_CAPABILITIES,
     DriverConfig,
     PathPolicy,
+    TorBrowserDriver,
 )
 
 from .server import ServerOptions, run_server
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+log = logging.getLogger(__name__)
+
+# MCP clients stop stdio servers with SIGTERM; Python's default action exits
+# without unwinding, which would orphan tor, geckodriver and firefox.
+_SHUTDOWN_SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)
 
 _LOG_LEVELS = ("debug", "info", "warning", "error")
 _PROFILE_MODES = ("ephemeral", "persistent")
@@ -266,6 +279,34 @@ def config_from_args(
     return config, options
 
 
+async def _serve(
+    config: DriverConfig,
+    options: ServerOptions,
+    *,
+    exit_process: Callable[[int], None] = os._exit,
+) -> None:
+    """Run the server until shutdown.
+
+    A shutdown signal closes the driver (Tor Browser, geckodriver, tor) at once
+    and exits. Cancelling the server task is not enough: the MCP stdio
+    transport reads stdin on a worker thread that cannot be cancelled, so the
+    task would not unwind until the client also closed stdin.
+    """
+
+    loop = asyncio.get_running_loop()
+
+    def on_driver(driver: TorBrowserDriver) -> None:
+        def shutdown_now() -> None:
+            log.info("shutdown signal received; stopping Tor Browser and tor")
+            driver.close()
+            exit_process(0)
+
+        for sig in _SHUTDOWN_SIGNALS:
+            loop.add_signal_handler(sig, shutdown_now)
+
+    await run_server(config, options, on_driver=None if sys.platform == "win32" else on_driver)
+
+
 def main() -> None:
     """Parse the command line and run the MCP server until shutdown."""
 
@@ -275,4 +316,4 @@ def main() -> None:
         level=getattr(logging, options.log_level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    asyncio.run(run_server(config, options))
+    asyncio.run(_serve(config, options))

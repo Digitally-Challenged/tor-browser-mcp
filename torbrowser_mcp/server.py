@@ -252,14 +252,20 @@ def _registry_add_tool(registry: _ToolRegistry) -> Callable[..., None]:
     return add_tool
 
 
-async def run_server(config: DriverConfig, options: ServerOptions) -> None:
+async def run_server(
+    config: DriverConfig,
+    options: ServerOptions,
+    *,
+    on_driver: Callable[[TorBrowserDriver], None] | None = None,
+) -> None:
     """Boot the driver, build the MCP server, and serve until shutdown.
 
     Lifecycle: the driver is entered as a context manager around the full
     server run, so the browser is up before the first MCP request and is
     torn down on shutdown (including on cancellation). ``--tool-module``
     files are loaded after the driver is up and before the server starts
-    accepting requests.
+    accepting requests. ``on_driver`` receives the live driver as soon as it
+    is up, so the caller can shut it down out of band (on a signal).
     """
 
     if options.transport != "stdio":
@@ -271,6 +277,8 @@ async def run_server(config: DriverConfig, options: ServerOptions) -> None:
     from .tool_module import ToolContext, load_tool_module
 
     with TorBrowserDriver(config) as driver:
+        if on_driver is not None:
+            on_driver(driver)
         server, registry = build_server(driver, config.enabled_caps)
 
         if options.tool_modules:
