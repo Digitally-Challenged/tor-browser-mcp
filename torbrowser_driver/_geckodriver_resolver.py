@@ -108,10 +108,18 @@ class GeckodriverResolveError(RuntimeError):
     """Raised when the resolver cannot produce a usable geckodriver path."""
 
 
-def _detect_firefox_version(tbb_root: Path) -> str:
-    """Return ``Version=`` from the bundle's ``Browser/application.ini``."""
+def _application_ini(tbb_root: Path) -> Path:
+    """The bundle's ``application.ini`` (under ``Contents/Resources`` in the macOS ``.app``)."""
 
-    app_ini = tbb_root / "Browser" / "application.ini"
+    if sys.platform == "darwin":
+        return tbb_root / "Contents" / "Resources" / "application.ini"
+    return tbb_root / "Browser" / "application.ini"
+
+
+def _detect_firefox_version(tbb_root: Path) -> str:
+    """Return ``Version=`` from the bundle's ``application.ini``."""
+
+    app_ini = _application_ini(tbb_root)
     if not app_ini.is_file():
         raise GeckodriverResolveError(
             f"cannot detect Firefox version: {app_ini!s} does not exist"

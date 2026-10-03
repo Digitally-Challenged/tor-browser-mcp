@@ -23,6 +23,7 @@ from torbrowser_driver import _geckodriver_resolver as resolver_mod
 from torbrowser_driver._geckodriver_resolver import (
     _FIREFOX_ESR_TO_GECKODRIVER,
     GeckodriverResolveError,
+    _application_ini,
     _geckodriver_version_for_firefox,
     default_cache_dir,
     resolve_geckodriver,
@@ -34,9 +35,9 @@ from torbrowser_driver._geckodriver_resolver import (
 
 
 def _write_app_ini(tbb_root: Path, firefox_version: str) -> None:
-    browser = tbb_root / "Browser"
-    browser.mkdir(parents=True, exist_ok=True)
-    (browser / "application.ini").write_text(
+    app_ini = _application_ini(tbb_root)
+    app_ini.parent.mkdir(parents=True, exist_ok=True)
+    app_ini.write_text(
         f"[App]\nVendor=Tor Project\nName=Firefox\nVersion={firefox_version}\n",
         encoding="utf-8",
     )
@@ -141,9 +142,9 @@ def test_detect_missing_application_ini(tmp_path: Path) -> None:
 
 
 def test_detect_application_ini_missing_version_key(tmp_path: Path) -> None:
-    browser = tmp_path / "Browser"
-    browser.mkdir()
-    (browser / "application.ini").write_text("[App]\nName=Firefox\n", encoding="utf-8")
+    app_ini = _application_ini(tmp_path)
+    app_ini.parent.mkdir(parents=True)
+    app_ini.write_text("[App]\nName=Firefox\n", encoding="utf-8")
     with pytest.raises(GeckodriverResolveError, match="Version"):
         resolve_geckodriver(tbb_root=tmp_path, cache_dir=tmp_path / "cache")
 
@@ -471,3 +472,12 @@ def test_bundled_geckodriver_does_not_invoke_resolver(
         _resolve_geckodriver(config)
 
     mocked.assert_not_called()
+
+
+def test_detect_firefox_version_reads_macos_app(
+    fake_macos_app: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from torbrowser_driver._geckodriver_resolver import _detect_firefox_version
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert _detect_firefox_version(fake_macos_app) == "140.17.0"
