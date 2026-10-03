@@ -347,8 +347,15 @@ def test_resolve_geckodriver_translates_resolver_failure(
 
 
 def _place_bundled_geckodriver(tbb_root: Path, *, executable: bool) -> Path:
-    """Write a fake geckodriver into <tbb_root>/Browser/ and set its mode."""
-    binary = tbb_root / "Browser" / "geckodriver"
+    """Write a fake geckodriver next to firefox and set its mode.
+
+    That is ``<tbb_root>/Browser/`` in the Linux/Windows bundle and
+    ``<app>/Contents/MacOS/`` in the macOS ``.app``.
+    """
+    firefox_dir = (
+        tbb_root / "Contents" / "MacOS" if sys.platform == "darwin" else tbb_root / "Browser"
+    )
+    binary = firefox_dir / "geckodriver"
     binary.write_bytes(b"fake-bundled-geckodriver")
     if executable:
         binary.chmod(binary.stat().st_mode | 0o111)

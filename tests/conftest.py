@@ -71,9 +71,29 @@ def drv(policy: PathPolicy) -> TorBrowserDriver:
     return instance
 
 
+def _build_fake_macos_app(root: Path) -> Path:
+    """Populate ``root`` with the ``Tor Browser.app`` shape ``DriverConfig`` expects on macOS."""
+
+    contents = root / "Contents"
+    tor_dir = contents / "MacOS" / "Tor"
+    tor_dir.mkdir(parents=True)
+    (contents / "MacOS" / "firefox").write_bytes(b"")
+    (tor_dir / "tor").write_bytes(b"")
+    geoip_dir = contents / "Resources" / "TorBrowser" / "Tor"
+    geoip_dir.mkdir(parents=True)
+    (geoip_dir / "geoip").write_bytes(b"")
+    (geoip_dir / "geoip6").write_bytes(b"")
+    (contents / "Resources" / "application.ini").write_text(
+        "[App]\nVersion=140.17.0\n", encoding="utf-8"
+    )
+    return root
+
+
 def _build_fake_tbb_layout(root: Path) -> Path:
     """Populate ``root`` with the file shape ``DriverConfig`` validates against."""
 
+    if sys.platform == "darwin":
+        return _build_fake_macos_app(root)
     browser = root / "Browser"
     browser.mkdir(parents=True)
     if sys.platform == "win32":
@@ -93,6 +113,13 @@ def fake_tbb_layout(tmp_path: Path) -> Path:
     """Path to a fake Tor Browser bundle laid out under ``tmp_path``."""
 
     return _build_fake_tbb_layout(tmp_path / "tbb")
+
+
+@pytest.fixture
+def fake_macos_app(tmp_path: Path) -> Path:
+    """A fake ``Tor Browser.app`` bundle under ``tmp_path``."""
+
+    return _build_fake_macos_app(tmp_path / "Tor Browser.app")
 
 
 # ---------------------------------------------------------------------------

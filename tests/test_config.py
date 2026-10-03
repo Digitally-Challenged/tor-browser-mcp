@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -129,3 +130,48 @@ def test_allow_chrome_system_access_tracks_unsafe_cap(
         enabled_caps=defaults.enabled_caps | {"unsafe"},
     )
     assert with_unsafe.allow_chrome_system_access is True
+
+
+def test_macos_app_layout_paths(
+    fake_macos_app: Path, policy: PathPolicy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "platform", "darwin")
+    config = DriverConfig(tbb_root=fake_macos_app, path_policy=policy)
+    root = config.tbb_root
+    assert config.firefox_path == root / "Contents" / "MacOS" / "firefox"
+    assert config.tor_path == root / "Contents" / "MacOS" / "Tor" / "tor"
+    assert config.browser_dir == root / "Contents" / "MacOS"
+    geoip_dir = root / "Contents" / "Resources" / "TorBrowser" / "Tor"
+    assert config.geoip_file == geoip_dir / "geoip"
+    assert config.geoip6_file == geoip_dir / "geoip6"
+    assert config.default_profile_path is None
+
+
+def test_macos_rejects_linux_layout(
+    tmp_path: Path, policy: PathPolicy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "platform", "darwin")
+    root = tmp_path / "tbb"
+    (root / "Browser" / "TorBrowser" / "Tor").mkdir(parents=True)
+    (root / "Browser" / "firefox").write_bytes(b"")
+    (root / "Browser" / "TorBrowser" / "Tor" / "tor").write_bytes(b"")
+    with pytest.raises(DriverConfigError):
+        DriverConfig(tbb_root=root, path_policy=policy)
+
+
+def test_linux_layout_unchanged(
+    tmp_path: Path, policy: PathPolicy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    root = tmp_path / "tbb"
+    (root / "Browser" / "TorBrowser" / "Tor").mkdir(parents=True)
+    (root / "Browser" / "firefox").write_bytes(b"")
+    (root / "Browser" / "TorBrowser" / "Tor" / "tor").write_bytes(b"")
+    config = DriverConfig(tbb_root=root, path_policy=policy)
+    browser = config.tbb_root / "Browser"
+    assert config.firefox_path == browser / "firefox"
+    assert config.tor_path == browser / "TorBrowser" / "Tor" / "tor"
+    assert config.default_profile_path == (
+        browser / "TorBrowser" / "Data" / "Browser" / "profile.default"
+    )
+    assert config.geoip_file == browser / "TorBrowser" / "Data" / "Tor" / "geoip"

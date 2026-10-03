@@ -29,6 +29,8 @@ def _firefox_relative() -> Path:
 
     if sys.platform == "win32":
         return Path("Browser") / "firefox.exe"
+    if sys.platform == "darwin":
+        return Path("Contents") / "MacOS" / "firefox"
     return Path("Browser") / "firefox"
 
 
@@ -37,6 +39,8 @@ def _tor_relative() -> Path:
 
     if sys.platform == "win32":
         return Path("Browser") / "TorBrowser" / "Tor" / "tor.exe"
+    if sys.platform == "darwin":
+        return Path("Contents") / "MacOS" / "Tor" / "tor"
     return Path("Browser") / "TorBrowser" / "Tor" / "tor"
 
 
@@ -45,8 +49,8 @@ class DriverConfig:
     """All inputs needed to launch a Tor Browser session.
 
     Attributes:
-        tbb_root: Root of an extracted Tor Browser bundle. Must contain
-            ``Browser/firefox(.exe)``.
+        tbb_root: Root of an extracted Tor Browser bundle (``Browser/firefox(.exe)``)
+            or, on macOS, the ``Tor Browser.app`` bundle (``Contents/MacOS/firefox``).
         geckodriver_path: Path to a geckodriver binary compatible with the
             Firefox ESR version Tor Browser ships. ``None`` means look it up
             on ``PATH``.
@@ -182,6 +186,8 @@ class DriverConfig:
 
     @property
     def browser_dir(self) -> Path:
+        if sys.platform == "darwin":
+            return self.tbb_root / "Contents" / "MacOS"
         return self.tbb_root / "Browser"
 
     @property
@@ -193,11 +199,17 @@ class DriverConfig:
         return self.tbb_root / _tor_relative()
 
     @property
-    def default_profile_path(self) -> Path:
+    def default_profile_path(self) -> Path | None:
+        """The bundle's profile template, or ``None`` when it ships none (macOS ``.app``)."""
+
+        if sys.platform == "darwin":
+            return None
         return self.browser_dir / "TorBrowser" / "Data" / "Browser" / "profile.default"
 
     @property
     def tor_data_root(self) -> Path:
+        if sys.platform == "darwin":
+            return self.tbb_root / "Contents" / "Resources" / "TorBrowser" / "Tor"
         return self.browser_dir / "TorBrowser" / "Data" / "Tor"
 
     @property

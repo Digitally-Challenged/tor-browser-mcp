@@ -229,7 +229,14 @@ def _build_profile(config: DriverConfig, session_dir: Path) -> FirefoxProfile:
         target = session_dir / "profile"
         if target.exists():
             shutil.rmtree(target)
-        shutil.copytree(config.default_profile_path, target)
+        template = config.default_profile_path
+        if template is None:
+            # The macOS .app ships no profile template. Firefox seeds a fresh profile
+            # from the app's built-in defaults (Tor Browser prefs live in omni.ja,
+            # bundled extensions in Contents/Resources/distribution).
+            target.mkdir(parents=True)
+        else:
+            shutil.copytree(template, target)
         profile_dir = target
     else:
         assert config.profile_path is not None  # enforced by DriverConfig
@@ -288,9 +295,10 @@ def _resolve_geckodriver(config: DriverConfig) -> str:
 
     1. ``config.geckodriver_path`` if the caller supplied one. This
        short-circuits every other step and never touches the network.
-    2. ``<tbb_root>/Browser/geckodriver`` if it exists and is executable.
-       Older Tor Browser releases shipped geckodriver inside the tarball;
-       users who placed one there manually are also covered.
+    2. A ``geckodriver`` next to firefox (``<tbb_root>/Browser/``, or
+       ``Contents/MacOS/`` in the macOS ``.app``) if it exists and is
+       executable. Older Tor Browser releases shipped geckodriver inside the
+       tarball; users who placed one there manually are also covered.
     3. A ``geckodriver`` binary on ``PATH``.
     4. The on-first-run resolver in :mod:`._geckodriver_resolver`, which
        downloads the version matching the bundle's Firefox ESR into
@@ -300,7 +308,7 @@ def _resolve_geckodriver(config: DriverConfig) -> str:
 
     if config.geckodriver_path is not None:
         return str(config.geckodriver_path)
-    bundled = config.tbb_root / "Browser" / "geckodriver"
+    bundled = config.browser_dir / "geckodriver"
     if bundled.is_file() and os.access(bundled, os.X_OK):
         log.info("geckodriver: using bundled binary at %s", bundled)
         return str(bundled)
