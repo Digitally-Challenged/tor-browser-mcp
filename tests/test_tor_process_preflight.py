@@ -150,3 +150,24 @@ def test_preflight_foreign_tor_does_not_claim_orphan(tmp_path: Path) -> None:
         assert "9999" not in message
     finally:
         busy.close()
+
+
+def _leave_port_in_time_wait() -> int:
+    """Open and close a loopback connection so the listening port sits in TIME_WAIT."""
+    listener = _bind_loopback(0)
+    port = listener.getsockname()[1]
+    client = socket.create_connection(("127.0.0.1", port))
+    served, _ = listener.accept()
+    served.close()  # the side that closes first holds TIME_WAIT on `port`
+    client.close()
+    listener.close()
+    return port
+
+
+def test_preflight_ignores_time_wait_from_a_previous_session(tmp_path: Path) -> None:
+    # tor binds with SO_REUSEADDR, so a port that only has TIME_WAIT left from the
+    # previous session is free for it; refusing would fail every quick restart.
+    port = _leave_port_in_time_wait()
+    tor_process.preflight_ports(
+        socks_port=port, control_port=_free_port(), expected_tor_exe=tmp_path / "tor"
+    )

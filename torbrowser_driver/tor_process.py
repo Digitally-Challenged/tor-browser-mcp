@@ -126,6 +126,10 @@ def launch_tor(
         "GeoIPFile": str(config.geoip_file),
         "GeoIPv6File": str(config.geoip6_file),
         "ClientUseIPv6": "1",
+        # tor polls this PID and exits once it is gone, so a server killed with
+        # SIGKILL (or before the driver is up) cannot leave tor holding its ports.
+        # Unlike take_ownership, this does not tie tor to the control connection.
+        "__OwningControllerProcess": str(os.getpid()),
     }
 
     log.info(
@@ -253,12 +257,14 @@ def preflight_ports(
 def _probe_port_holder(port: int) -> bool | None:
     """Return ``True`` if ``port`` is bound on loopback, else ``None``.
 
-    The probe attempts to bind a fresh socket to ``127.0.0.1:port`` with
-    ``SO_REUSEADDR`` off. A successful bind is released immediately and
-    returns ``None`` (free). A bind failure indicates the port is in use.
+    The probe binds a fresh socket to ``127.0.0.1:port`` with ``SO_REUSEADDR``
+    on, the way tor binds its listeners: a live listener still makes the bind
+    fail, but connections left in TIME_WAIT by a previous session do not. A
+    successful bind is released immediately and returns ``None`` (free).
     """
 
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         probe.bind(("127.0.0.1", port))
     except OSError:
