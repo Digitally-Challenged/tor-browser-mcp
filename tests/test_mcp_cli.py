@@ -183,3 +183,24 @@ def test_parser_help_runs() -> None:
     with pytest.raises(SystemExit) as info:
         parser.parse_args(["--help"])
     assert info.value.code == 0
+
+
+def test_tor_data_dir_flag_sets_persistent_tor_data(
+    fake_tbb_layout: Path, out_dir: Path, tmp_path: Path
+) -> None:
+    tor_data = tmp_path / "tor-data"
+    ns = parse_args(
+        [
+            "--tbb-root", str(fake_tbb_layout),
+            "--output-dir", str(out_dir),
+            "--tor-data-dir", str(tor_data),
+        ]
+    )
+    config, _ = config_from_args(ns)
+    assert config.tor_data_dir == tor_data
+
+
+def test_tor_data_dir_defaults_to_per_session(fake_tbb_layout: Path, out_dir: Path) -> None:
+    ns = parse_args(["--tbb-root", str(fake_tbb_layout), "--output-dir", str(out_dir)])
+    config, _ = config_from_args(ns)
+    assert config.tor_data_dir is None

@@ -141,6 +141,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Tor control port for the bundled tor (default 9251).",
     )
     parser.add_argument(
+        "--tor-data-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Persistent DataDirectory for the bundled tor. Reusing it keeps cached "
+            "directory info and entry guards across sessions, as Tor Browser does. "
+            "Default: a fresh directory per session."
+        ),
+    )
+    parser.add_argument(
         "--profile-mode",
         choices=_PROFILE_MODES,
         default="ephemeral",
@@ -267,6 +277,7 @@ def config_from_args(
         headless=ns.headless,
         socks_port=ns.socks_port,
         control_port=ns.control_port,
+        tor_data_dir=ns.tor_data_dir.expanduser() if ns.tor_data_dir is not None else None,
         enabled_caps=enabled_caps,
     )
 
