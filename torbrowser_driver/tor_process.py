@@ -130,6 +130,10 @@ def launch_tor(
         # SIGKILL (or before the driver is up) cannot leave tor holding its ports.
         # Unlike take_ownership, this does not tie tor to the control connection.
         "__OwningControllerProcess": str(os.getpid()),
+        # A reused DataDirectory restores `Dormant 1` after an idle session, and a
+        # dormant tor waits for client traffic before bootstrapping, while the
+        # browser that would send it waits for bootstrap. Always start active.
+        "DormantCanceledByStartup": "1",
     }
 
     log.info(
